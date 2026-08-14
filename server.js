@@ -1,83 +1,157 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
+const session = require('express-session');
+const db = require('./lib/db');
+const { hashPassword, verifyPassword, getSessionSecret, requireAuth, redirectIfAuthed } = require('./lib/auth');
+
 const app = express();
-const bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({ extended: true }));
 
-const DATA_FILE = path.join(__dirname, 'orders.json');
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(session({
+  secret: getSessionSecret(),
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 jours
+  },
+}));
 
-let orders = {};
-try {
-    orders = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-} catch (err) {
-    orders = {};
-}
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
-function saveOrders() {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(orders, null, 2));
-}
+// --- Pages d'authentification ---
 
-app.get('/', function(req, res) {
-    res.sendFile(__dirname + '/index.html');
+app.get('/login', redirectIfAuthed, (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-// Route pour afficher toutes les commandes
-app.get('/orders', (req, res) => {
-    res.sendFile(__dirname + '/orders.html');
+app.get('/signup', redirectIfAuthed, (req, res) => {
+  res.sendFile(path.join(__dirname, 'signup.html'));
 });
 
-// API JSON utilisée par la page des commandes pour afficher l'état actuel du serveur
-app.get('/api/orders', (req, res) => {
-    res.json(orders);
+app.post('/signup', (req, res) => {
+  const name = (req.body.name || '').trim();
+  const password = req.body.password || '';
+
+  if (name.length < 2) {
+    return res.redirect('/signup?error=' + encodeURIComponent('Le nom doit faire au moins 2 caractères.'));
+  }
+  if (password.length < 6) {
+    return res.redirect('/signup?error=' + encodeURIComponent('Le mot de passe doit faire au moins 6 caractères.'));
+  }
+  if (db.findUserByName(name)) {
+    return res.redirect('/signup?error=' + encodeURIComponent('Ce nom est déjà utilisé.'));
+  }
+
+  const user = db.createUser(name, hashPassword(password));
+  req.session.userId = user.id;
+  req.session.userName = user.name;
+  res.redirect('/');
 });
 
-app.use(express.static(__dirname));
+app.post('/login', (req, res) => {
+  const name = (req.body.name || '').trim();
+  const password = req.body.password || '';
 
-// Route pour l'enregistrement d'une commande
-app.post('/register', function(req, res) {
-    const name = (req.body.name || '').trim();
-    const order = (req.body.order || '').trim();
+  const user = db.findUserByName(name);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    return res.redirect('/login?error=' + encodeURIComponent('Nom ou mot de passe incorrect.'));
+  }
 
-    if (!name || !order) {
-        return res.redirect('/');
+  req.session.userId = user.id;
+  req.session.userName = user.name;
+  res.redirect('/');
+});
+
+app.post('/logout', requireAuth, (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/login');
+  });
+});
+
+// --- Pages protégées ---
+
+app.get('/', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/stats', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'stats.html'));
+});
+
+// --- API ---
+
+app.get('/api/me', requireAuth, (req, res) => {
+  res.json({ id: req.session.userId, name: req.session.userName });
+});
+
+app.get('/api/items', requireAuth, (req, res) => {
+  res.json(db.listItemNames());
+});
+
+app.get('/api/orders/today', requireAuth, (req, res) => {
+  res.json(db.ordersForDate(db.todayStr()));
+});
+
+app.post('/api/orders', requireAuth, (req, res) => {
+  const itemName = (req.body.itemName || '').trim();
+  const quantity = parseInt(req.body.quantity, 10);
+
+  if (!itemName || itemName.length > 100) {
+    return res.status(400).json({ error: 'Plat invalide.' });
+  }
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+    return res.status(400).json({ error: 'Quantité invalide.' });
+  }
+
+  const order = db.addOrder(req.session.userId, req.session.userName, itemName, quantity);
+  res.status(201).json(order);
+});
+
+app.delete('/api/orders/:id', requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const result = db.deleteOrder(id, req.session.userId);
+
+  if (!result.ok) {
+    const message = result.status === 403 ? 'Tu ne peux supprimer que tes propres commandes.' : 'Commande introuvable.';
+    return res.status(result.status).json({ error: message });
+  }
+  res.status(204).end();
+});
+
+app.get('/api/stats', requireAuth, (req, res) => {
+  const scope = req.query.scope === 'year' ? 'year' : 'month';
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+
+  const from = scope === 'year' ? `${year}-01-01` : `${year}-${month}-01`;
+  const to = scope === 'year' ? `${year}-12-31` : `${year}-${month}-31`;
+
+  const orders = db.ordersInRange(from, to);
+  const byUser = {};
+  for (const order of orders) {
+    if (!byUser[order.userName]) {
+      byUser[order.userName] = new Map();
     }
-
-    if (orders[name]) {
-        // Si l'utilisateur a déjà passé une commande, on ajoute sa nouvelle commande à son tableau de commandes existant
-        orders[name].push(order);
-    } else {
-        // Si l'utilisateur n'a jamais passé de commande, on crée un nouveau tableau de commandes pour lui et on y ajoute sa commande
-        orders[name] = [order];
+    const key = order.itemName.trim().toLowerCase();
+    const bucket = byUser[order.userName];
+    if (!bucket.has(key)) {
+      bucket.set(key, { itemName: order.itemName, quantity: 0 });
     }
-    saveOrders();
-    res.redirect('/orders');
-});
+    bucket.get(key).quantity += order.quantity;
+  }
 
-// Route pour supprimer une commande précise d'une personne
-app.delete('/api/orders/:name/:index', function(req, res) {
-    const name = req.params.name;
-    const index = parseInt(req.params.index, 10);
-
-    if (!orders[name] || !Number.isInteger(index) || index < 0 || index >= orders[name].length) {
-        return res.status(404).json({ error: 'Commande introuvable' });
-    }
-
-    orders[name].splice(index, 1);
-    if (orders[name].length === 0) {
-        delete orders[name];
-    }
-    saveOrders();
-    res.json(orders);
-});
-
-app.post('/clear', function(req, res) {
-    orders = {};
-    saveOrders();
-    res.redirect('/orders');
+  const result = {};
+  for (const [userName, bucket] of Object.entries(byUser)) {
+    result[userName] = Array.from(bucket.values());
+  }
+  res.json(result);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, function() {
-    console.log(`Serveur démarré sur le port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Serveur démarré sur le port ${PORT}`);
 });

@@ -1,27 +1,50 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Sushiax</title>
-    <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <img class="axianslogo" src="https://www.axians.fr/app/uploads/sites/55/2022/05/Logo_Axians_White_512x512-1.png">
-    <form id="registerForm" action="/register" method="post">
-        <h1>Pète toi le bide</h1>
-        <h2>Et ne perd pas le compte</h2>
-        <p class="hint">Si tu commandes plusieurs fois, chaque commande s'ajoute à ta liste (elle ne remplace pas la précédente).</p>
-        <div class="group">
-            <input type="text" id="name" name="name" required>
-            <label for="name">Nom :</label>
-        </div>
-        <div class="group">
-            <input type="text" id="order" name="order" required>
-            <label for="order">Commande :</label>
-        </div>
-        <div class="group">
-            <button type="submit">Enregistrer</button>
-            <input type="button" value="Orders" onclick="self.location.href='orders'">
-        </div>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sushiax — Commandes</title>
+  <link rel="stylesheet" href="/public/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbarInner">
+      <a href="/" class="brand">🍣 Sushiax</a>
+      <nav class="mainNav">
+        <a href="/" class="navLink navLinkActive">Commandes</a>
+        <a href="/stats" class="navLink">Statistiques</a>
+      </nav>
+      <div class="userbox">
+        <span id="userName"></span>
+        <form action="/logout" method="post">
+          <button type="submit" class="linklike">Déconnexion</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1>Commandes du jour <span class="wave">🍱</span></h1>
+
+    <form id="orderForm" class="orderForm">
+      <div class="field fieldGrow">
+        <label for="itemName">Plat</label>
+        <input type="text" id="itemName" name="itemName" list="itemsList" required placeholder="ex : California, Maki thon...">
+        <datalist id="itemsList"></datalist>
+      </div>
+      <div class="field fieldQty">
+        <label for="quantity">Qté</label>
+        <input type="number" id="quantity" name="quantity" min="1" max="20" value="1" required>
+      </div>
+      <button type="submit" class="btn btnPrimary">Ajouter</button>
     </form>
-  </body>
+
+    <p id="summary" class="summary"></p>
+    <div id="totalContainer" class="totalCard"></div>
+    <div id="peopleContainer" class="peopleContainer"></div>
+  </main>
+
+  <script src="/public/header.js"></script>
+  <script src="/public/app.js"></script>
+</body>
 </html>

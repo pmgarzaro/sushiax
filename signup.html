@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sushiax — Créer un compte</title>
+  <link rel="stylesheet" href="/public/styles.css">
+</head>
+<body class="authBody">
+  <div class="authCard">
+    <div class="brandMark">🍣</div>
+    <h1 class="brandTitle">Sushiax</h1>
+    <p class="brandSubtitle">Crée ton compte</p>
+
+    <p id="errorMessage" class="formError" hidden></p>
+
+    <form action="/signup" method="post" class="stackForm" id="signupForm">
+      <div class="field">
+        <label for="name">Nom</label>
+        <input type="text" id="name" name="name" required autofocus minlength="2">
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" required minlength="6">
+      </div>
+      <div class="field">
+        <label for="confirmPassword">Confirme le mot de passe</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6">
+      </div>
+      <button type="submit" class="btn btnPrimary">Créer mon compte</button>
+    </form>
+
+    <p class="switchLink">Déjà un compte ? <a href="/login">Connecte-toi</a></p>
+  </div>
+  <script src="/public/auth-forms.js"></script>
+</body>
+</html>
