@@ -1,18 +1,123 @@
-async function loadStats(scope) {
-  const res = await fetch(`/api/stats?scope=${scope}`);
-  const data = await res.json();
+let rawData = {}; // { personName: [{ itemName, quantity }, ...] }
+
+function uniqueSorted(values) {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function populateFilters() {
+  const personSelect = document.getElementById('personFilter');
+  const dishSelect = document.getElementById('dishFilter');
+
+  const people = uniqueSorted(Object.keys(rawData));
+
+  const dishesByKey = new Map();
+  for (const items of Object.values(rawData)) {
+    for (const item of items) {
+      const key = item.itemName.toLowerCase();
+      if (!dishesByKey.has(key)) {
+        dishesByKey.set(key, item.itemName);
+      }
+    }
+  }
+  const dishes = Array.from(dishesByKey.values()).sort((a, b) => a.localeCompare(b, 'fr'));
+
+  const previousPerson = personSelect.value;
+  const previousDish = dishSelect.value;
+
+  personSelect.innerHTML = '';
+  personSelect.appendChild(new Option('Toutes les personnes', ''));
+  for (const name of people) {
+    personSelect.appendChild(new Option(name, name));
+  }
+
+  dishSelect.innerHTML = '';
+  dishSelect.appendChild(new Option('Tous les plats', ''));
+  for (const name of dishes) {
+    dishSelect.appendChild(new Option(name, name));
+  }
+
+  if (people.includes(previousPerson)) {
+    personSelect.value = previousPerson;
+  }
+  if (dishes.includes(previousDish)) {
+    dishSelect.value = previousDish;
+  }
+}
+
+function getFilteredData() {
+  const person = document.getElementById('personFilter').value;
+  const dish = document.getElementById('dishFilter').value.toLowerCase();
+
+  const result = {};
+  for (const [name, items] of Object.entries(rawData)) {
+    if (person && name !== person) {
+      continue;
+    }
+    const filteredItems = dish ? items.filter((item) => item.itemName.toLowerCase() === dish) : items;
+    if (filteredItems.length > 0) {
+      result[name] = filteredItems;
+    }
+  }
+  return result;
+}
+
+function renderBarChart(container, entries) {
+  container.innerHTML = '';
+
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune donnée sur cette période.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const max = Math.max(...entries.map((entry) => entry.value));
+
+  for (const entry of entries) {
+    const row = document.createElement('div');
+    row.className = 'barRow';
+    row.tabIndex = 0;
+    row.title = `${entry.label} : ${entry.value}`;
+
+    const label = document.createElement('span');
+    label.className = 'barLabel';
+    label.textContent = entry.label;
+    row.appendChild(label);
+
+    const track = document.createElement('div');
+    track.className = 'barTrack';
+    const fill = document.createElement('div');
+    fill.className = `barFill ${entry.hueClass}`;
+    fill.style.width = `${max > 0 ? (entry.value / max) * 100 : 0}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+
+    const value = document.createElement('span');
+    value.className = 'barValue';
+    value.textContent = entry.value;
+    row.appendChild(value);
+
+    container.appendChild(row);
+  }
+}
+
+function renderDetailCards(filtered) {
   const container = document.getElementById('statsContainer');
   container.innerHTML = '';
 
-  const names = Object.keys(data).sort((a, b) => a.localeCompare(b, 'fr'));
+  const names = Object.keys(filtered).sort((a, b) => a.localeCompare(b, 'fr'));
 
   if (names.length === 0) {
-    container.innerHTML = '<p class="emptyState">Aucune commande enregistrée sur cette période.</p>';
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune commande enregistrée sur cette période.';
+    container.appendChild(empty);
     return;
   }
 
   for (const name of names) {
-    const items = data[name];
+    const items = filtered[name];
     const total = items.reduce((sum, item) => sum + item.quantity, 0);
 
     const card = document.createElement('div');
@@ -37,6 +142,43 @@ async function loadStats(scope) {
   }
 }
 
+function renderAll() {
+  const filtered = getFilteredData();
+
+  const personEntries = Object.entries(filtered)
+    .map(([name, items]) => ({
+      label: name,
+      value: items.reduce((sum, item) => sum + item.quantity, 0),
+      hueClass: 'barFillVermillion',
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const dishTotals = new Map();
+  for (const items of Object.values(filtered)) {
+    for (const item of items) {
+      const key = item.itemName.toLowerCase();
+      const existing = dishTotals.get(key);
+      if (existing) {
+        existing.value += item.quantity;
+      } else {
+        dishTotals.set(key, { label: item.itemName, value: item.quantity, hueClass: 'barFillIndigo' });
+      }
+    }
+  }
+  const dishEntries = Array.from(dishTotals.values()).sort((a, b) => b.value - a.value);
+
+  renderBarChart(document.getElementById('personChart'), personEntries);
+  renderBarChart(document.getElementById('dishChart'), dishEntries);
+  renderDetailCards(filtered);
+}
+
+async function loadStats(scope) {
+  const res = await fetch(`/api/stats?scope=${scope}`);
+  rawData = await res.json();
+  populateFilters();
+  renderAll();
+}
+
 const tabButtons = document.querySelectorAll('.tabBtn');
 tabButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -45,6 +187,9 @@ tabButtons.forEach((btn) => {
     loadStats(btn.dataset.scope);
   });
 });
+
+document.getElementById('personFilter').addEventListener('change', renderAll);
+document.getElementById('dishFilter').addEventListener('change', renderAll);
 
 (async () => {
   await loadMe();
