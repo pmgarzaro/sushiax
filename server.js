@@ -6,6 +6,9 @@ const { hashPassword, verifyPassword, getSessionSecret, requireAuth, redirectIfA
 
 const app = express();
 
+// Railway/Azure both sit behind a reverse proxy that terminates TLS.
+app.set('trust proxy', 1);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({

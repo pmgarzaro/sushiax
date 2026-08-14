@@ -151,6 +151,15 @@ a {
 
 .sectionTitle {
   font-size: 19px;
+  margin: 0;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   margin: 6px 0 14px;
 }
 

@@ -142,6 +142,58 @@ function renderDetailCards(filtered) {
   }
 }
 
+function renderDetailByDish(filtered) {
+  const container = document.getElementById('statsContainer');
+  container.innerHTML = '';
+
+  const dishByKey = new Map();
+  for (const [name, items] of Object.entries(filtered)) {
+    for (const item of items) {
+      const key = item.itemName.toLowerCase();
+      if (!dishByKey.has(key)) {
+        dishByKey.set(key, { label: item.itemName, total: 0, people: [] });
+      }
+      const bucket = dishByKey.get(key);
+      bucket.total += item.quantity;
+      bucket.people.push({ name, quantity: item.quantity });
+    }
+  }
+
+  const dishes = Array.from(dishByKey.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'fr'));
+
+  if (dishes.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune commande enregistrée sur cette période.';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (const dish of dishes) {
+    const card = document.createElement('div');
+    card.className = 'orderCard';
+
+    const heading = document.createElement('h3');
+    heading.textContent = `${dish.label} — ${dish.total} au total`;
+    card.appendChild(heading);
+
+    const list = document.createElement('ul');
+    dish.people
+      .slice()
+      .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, 'fr'))
+      .forEach((entry) => {
+        const li = document.createElement('li');
+        li.textContent = `${entry.quantity}× ${entry.name}`;
+        list.appendChild(li);
+      });
+    card.appendChild(list);
+
+    container.appendChild(card);
+  }
+}
+
+let currentDetailView = 'person';
+
 function renderAll() {
   const filtered = getFilteredData();
 
@@ -169,7 +221,12 @@ function renderAll() {
 
   renderBarChart(document.getElementById('personChart'), personEntries);
   renderBarChart(document.getElementById('dishChart'), dishEntries);
-  renderDetailCards(filtered);
+
+  if (currentDetailView === 'dish') {
+    renderDetailByDish(filtered);
+  } else {
+    renderDetailCards(filtered);
+  }
 }
 
 async function loadStats(scope) {
@@ -179,12 +236,22 @@ async function loadStats(scope) {
   renderAll();
 }
 
-const tabButtons = document.querySelectorAll('.tabBtn');
-tabButtons.forEach((btn) => {
+const scopeTabButtons = document.querySelectorAll('#scopeTabs .tabBtn');
+scopeTabButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
-    tabButtons.forEach((b) => b.classList.remove('tabBtnActive'));
+    scopeTabButtons.forEach((b) => b.classList.remove('tabBtnActive'));
     btn.classList.add('tabBtnActive');
     loadStats(btn.dataset.scope);
+  });
+});
+
+const viewTabButtons = document.querySelectorAll('#viewTabs .tabBtn');
+viewTabButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    viewTabButtons.forEach((b) => b.classList.remove('tabBtnActive'));
+    btn.classList.add('tabBtnActive');
+    currentDetailView = btn.dataset.view;
+    renderAll();
   });
 });
 

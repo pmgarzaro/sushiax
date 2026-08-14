@@ -26,7 +26,7 @@
   <main class="page">
     <h1>Statistiques <span class="wave">📊</span></h1>
 
-    <div class="filterRow">
+    <div class="filterRow" id="scopeTabs">
       <div class="tabs">
         <button type="button" class="tabBtn tabBtnActive" data-scope="month">Ce mois-ci</button>
         <button type="button" class="tabBtn" data-scope="year">Cette année</button>
@@ -46,7 +46,13 @@
       </div>
     </div>
 
-    <h2 class="sectionTitle">Détail par personne</h2>
+    <div class="detailHeader">
+      <h2 class="sectionTitle">Détail</h2>
+      <div class="tabs" id="viewTabs">
+        <button type="button" class="tabBtn tabBtnActive" data-view="person">Par personne</button>
+        <button type="button" class="tabBtn" data-view="dish">Par plat</button>
+      </div>
+    </div>
     <div id="statsContainer" class="peopleContainer"></div>
   </main>
 
