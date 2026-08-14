@@ -36,7 +36,13 @@ h1, h2, p {
 }
 
 h2 {
-  margin-bottom: 50px;
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 30px;
 }
 
 form, .group_form {
@@ -125,8 +131,62 @@ input:focus + label, input:valid + label {
   position: relative;
 }
 
-table {
-  margin-top: 20px;
+.summary {
+  color: var(--color-text);
+  opacity: 0.7;
+  margin: -10px 0 15px;
+  font-size: 14px;
+}
+
+.orderCard {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.orderCard h2 {
+  text-align: left;
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.orderCard ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orderCard li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.orderCard li span {
+  color: var(--color-text);
+}
+
+.deleteItem {
+  background: none;
+  color: #b00020;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.deleteItem:hover {
+  cursor: pointer;
+  background: #b00020;
+  color: white;
+  border-color: transparent;
 }
 
 button, input[type=button] {
