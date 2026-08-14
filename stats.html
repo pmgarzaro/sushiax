@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sushiax — Statistiques</title>
+  <link rel="stylesheet" href="/public/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbarInner">
+      <a href="/" class="brand">🍣 Sushiax</a>
+      <nav class="mainNav">
+        <a href="/" class="navLink">Commandes</a>
+        <a href="/stats" class="navLink navLinkActive">Statistiques</a>
+      </nav>
+      <div class="userbox">
+        <span id="userName"></span>
+        <form action="/logout" method="post">
+          <button type="submit" class="linklike">Déconnexion</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1>Statistiques <span class="wave">📊</span></h1>
+
+    <div class="filterRow" id="scopeTabs">
+      <div class="tabs">
+        <button type="button" class="tabBtn tabBtnActive" data-scope="month">Ce mois-ci</button>
+        <button type="button" class="tabBtn" data-scope="year">Cette année</button>
+      </div>
+      <select id="personFilter" class="filterSelect"></select>
+      <select id="dishFilter" class="filterSelect"></select>
+    </div>
+
+    <div class="chartsGrid">
+      <div class="chartCard">
+        <h2>Qui a le plus mangé <span class="chartHint">(nb. de plats)</span></h2>
+        <div id="personChart" class="barChart"></div>
+      </div>
+      <div class="chartCard">
+        <h2>Plats les plus commandés <span class="chartHint">(nb. de plats)</span></h2>
+        <div id="dishChart" class="barChart"></div>
+      </div>
+    </div>
+
+    <div class="detailHeader">
+      <h2 class="sectionTitle">Détail</h2>
+      <div class="tabs" id="viewTabs">
+        <button type="button" class="tabBtn tabBtnActive" data-view="person">Par personne</button>
+        <button type="button" class="tabBtn" data-view="dish">Par plat</button>
+      </div>
+    </div>
+    <div id="statsContainer" class="peopleContainer"></div>
+  </main>
+
+  <script src="/public/header.js"></script>
+  <script src="/public/stats.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sushiax — Connexion</title>
+  <link rel="stylesheet" href="/public/styles.css">
+</head>
+<body class="authBody">
+  <div class="authCard">
+    <div class="brandMark">🍣</div>
+    <h1 class="brandTitle">Sushiax</h1>
+    <p class="brandSubtitle">Connecte-toi pour commander</p>
+
+    <p id="errorMessage" class="formError" hidden></p>
+
+    <form action="/login" method="post" class="stackForm">
+      <div class="field">
+        <label for="name">Nom</label>
+        <input type="text" id="name" name="name" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" class="btn btnPrimary">Se connecter</button>
+    </form>
+
+    <p class="switchLink">Pas encore de compte ? <a href="/signup">Crée-en un</a></p>
+  </div>
+  <script src="/public/auth-forms.js"></script>
+</body>
+</html>
