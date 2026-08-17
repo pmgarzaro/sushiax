@@ -1,22 +1,45 @@
-let rawData = {}; // { personName: [{ itemName, quantity }, ...] }
+const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+const DONUT_COLOR_CLASSES = ['donutColor1', 'donutColor2', 'donutColor3', 'donutColor4', 'donutColor5'];
+
+let rawOrders = []; // [{ userName, itemName, quantity, date }, ...]
+let currentScope = 'month';
+let currentDetailView = 'person';
 
 function uniqueSorted(values) {
   return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, 'fr'));
 }
 
+function formatDate(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00`);
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+}
+
+function groupByItemName(orders) {
+  const map = new Map();
+  for (const order of orders) {
+    const key = order.itemName.trim().toLowerCase();
+    const existing = map.get(key);
+    if (existing) {
+      existing.value += order.quantity;
+    } else {
+      map.set(key, { label: order.itemName, value: order.quantity });
+    }
+  }
+  return map;
+}
+
+// --- Filtres ---
+
 function populateFilters() {
   const personSelect = document.getElementById('personFilter');
   const dishSelect = document.getElementById('dishFilter');
 
-  const people = uniqueSorted(Object.keys(rawData));
-
+  const people = uniqueSorted(rawOrders.map((o) => o.userName));
   const dishesByKey = new Map();
-  for (const items of Object.values(rawData)) {
-    for (const item of items) {
-      const key = item.itemName.toLowerCase();
-      if (!dishesByKey.has(key)) {
-        dishesByKey.set(key, item.itemName);
-      }
+  for (const order of rawOrders) {
+    const key = order.itemName.toLowerCase();
+    if (!dishesByKey.has(key)) {
+      dishesByKey.set(key, order.itemName);
     }
   }
   const dishes = Array.from(dishesByKey.values()).sort((a, b) => a.localeCompare(b, 'fr'));
@@ -44,22 +67,33 @@ function populateFilters() {
   }
 }
 
-function getFilteredData() {
+function getFilteredOrders() {
   const person = document.getElementById('personFilter').value;
   const dish = document.getElementById('dishFilter').value.toLowerCase();
 
-  const result = {};
-  for (const [name, items] of Object.entries(rawData)) {
-    if (person && name !== person) {
-      continue;
+  return rawOrders.filter((order) => {
+    if (person && order.userName !== person) {
+      return false;
     }
-    const filteredItems = dish ? items.filter((item) => item.itemName.toLowerCase() === dish) : items;
-    if (filteredItems.length > 0) {
-      result[name] = filteredItems;
+    if (dish && order.itemName.toLowerCase() !== dish) {
+      return false;
     }
-  }
-  return result;
+    return true;
+  });
 }
+
+function groupByPerson(orders) {
+  const byPerson = {};
+  for (const order of orders) {
+    if (!byPerson[order.userName]) {
+      byPerson[order.userName] = [];
+    }
+    byPerson[order.userName].push(order);
+  }
+  return byPerson;
+}
+
+// --- Barres (qui a le plus mangé / plats les plus commandés) ---
 
 function renderBarChart(container, entries) {
   container.innerHTML = '';
@@ -102,7 +136,257 @@ function renderBarChart(container, entries) {
   }
 }
 
-function renderDetailCards(filtered) {
+// --- Indicateurs (KPI) ---
+
+function renderKpis(orders) {
+  const container = document.getElementById('kpiRow');
+  container.innerHTML = '';
+
+  const totalItems = orders.reduce((sum, o) => sum + o.quantity, 0);
+  const people = new Set(orders.map((o) => o.userName));
+  const days = new Set(orders.map((o) => o.date));
+  const dishTotals = groupByItemName(orders);
+
+  let topDish = null;
+  for (const entry of dishTotals.values()) {
+    if (!topDish || entry.value > topDish.value) {
+      topDish = entry;
+    }
+  }
+
+  const avgPerPerson = people.size > 0 ? totalItems / people.size : 0;
+  const avgLabel = Number.isInteger(avgPerPerson) ? String(avgPerPerson) : avgPerPerson.toFixed(1);
+
+  const tiles = [
+    { value: String(totalItems), label: 'Plats commandés' },
+    { value: avgLabel, label: 'Moyenne / personne' },
+    { value: topDish ? topDish.label : '—', label: 'Plat n°1' },
+    { value: String(days.size), label: 'Jours de commande' },
+  ];
+
+  for (const tile of tiles) {
+    const el = document.createElement('div');
+    el.className = 'kpiTile';
+
+    const value = document.createElement('span');
+    value.className = 'kpiValue';
+    value.textContent = tile.value;
+    value.title = tile.value;
+    el.appendChild(value);
+
+    const label = document.createElement('span');
+    label.className = 'kpiLabel';
+    label.textContent = tile.label;
+    el.appendChild(label);
+
+    container.appendChild(el);
+  }
+}
+
+// --- Évolution (colonnes) ---
+
+function computeEvolution(orders, scope) {
+  const now = new Date();
+
+  if (scope === 'year') {
+    const buckets = MONTH_LABELS.map((label) => ({ label, value: 0 }));
+    for (const order of orders) {
+      const monthIndex = parseInt(order.date.slice(5, 7), 10) - 1;
+      if (buckets[monthIndex]) {
+        buckets[monthIndex].value += order.quantity;
+      }
+    }
+    return buckets;
+  }
+
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
+  for (const order of orders) {
+    const dayIndex = parseInt(order.date.slice(8, 10), 10) - 1;
+    if (buckets[dayIndex]) {
+      buckets[dayIndex].value += order.quantity;
+    }
+  }
+  return buckets;
+}
+
+function renderEvolution(orders) {
+  const container = document.getElementById('evolutionChart');
+  const hint = document.getElementById('evolutionHint');
+  container.innerHTML = '';
+
+  const buckets = computeEvolution(orders, currentScope);
+  hint.textContent = currentScope === 'year' ? '(par mois)' : '(par jour)';
+
+  if (orders.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune donnée sur cette période.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const max = Math.max(...buckets.map((b) => b.value), 1);
+  const showEveryLabel = currentScope === 'year';
+
+  const bars = document.createElement('div');
+  bars.className = 'evolutionBars';
+
+  const labels = document.createElement('div');
+  labels.className = 'evolutionLabels';
+
+  buckets.forEach((bucket, index) => {
+    const col = document.createElement('div');
+    col.className = 'evoCol';
+    col.tabIndex = 0;
+    col.title = `${currentScope === 'year' ? bucket.label : `Jour ${bucket.label}`} : ${bucket.value}`;
+
+    const fill = document.createElement('div');
+    fill.className = 'evoColFill';
+    fill.style.height = `${(bucket.value / max) * 100}%`;
+
+    if (bucket.value === max && bucket.value > 0) {
+      const peak = document.createElement('span');
+      peak.className = 'evoColPeak';
+      peak.textContent = bucket.value;
+      fill.appendChild(peak);
+    }
+
+    col.appendChild(fill);
+    bars.appendChild(col);
+
+    const labelEl = document.createElement('span');
+    const dayNum = index + 1;
+    const showDayLabel = showEveryLabel || dayNum === 1 || dayNum === buckets.length || dayNum % 5 === 0;
+    labelEl.textContent = showDayLabel ? bucket.label : '';
+    labels.appendChild(labelEl);
+  });
+
+  container.appendChild(bars);
+  container.appendChild(labels);
+}
+
+// --- Donut « part de la carte » ---
+
+function renderDonut(orders) {
+  const container = document.getElementById('donutChart');
+  container.innerHTML = '';
+
+  const dishTotals = Array.from(groupByItemName(orders).values()).sort((a, b) => b.value - a.value);
+  const total = dishTotals.reduce((sum, d) => sum + d.value, 0);
+
+  if (total === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune donnée sur cette période.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const top = dishTotals.slice(0, 5).map((d, i) => ({ ...d, colorClass: DONUT_COLOR_CLASSES[i] }));
+  const restTotal = dishTotals.slice(5).reduce((sum, d) => sum + d.value, 0);
+  const segments = restTotal > 0 ? [...top, { label: 'Autres', value: restTotal, colorClass: 'donutColorOther' }] : top;
+
+  let cumulative = 0;
+  const stops = segments.map((segment) => {
+    const start = (cumulative / total) * 360;
+    cumulative += segment.value;
+    const end = (cumulative / total) * 360;
+    return `var(--${segment.colorClass}) ${start}deg ${end}deg`;
+  });
+
+  const ring = document.createElement('div');
+  ring.className = 'donutRing';
+  ring.style.background = `conic-gradient(${stops.join(', ')})`;
+  container.appendChild(ring);
+
+  const legend = document.createElement('ul');
+  legend.className = 'donutLegend';
+  for (const segment of segments) {
+    const li = document.createElement('li');
+
+    const dot = document.createElement('span');
+    dot.className = `donutDot ${segment.colorClass}`;
+    li.appendChild(dot);
+
+    const text = document.createElement('span');
+    const pct = Math.round((segment.value / total) * 100);
+    text.textContent = `${segment.label} — ${pct}% (${segment.value})`;
+    li.appendChild(text);
+
+    legend.appendChild(li);
+  }
+  container.appendChild(legend);
+}
+
+// --- Records ---
+
+function renderRecords(orders) {
+  const list = document.getElementById('recordsList');
+  list.innerHTML = '';
+
+  if (orders.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune donnée sur cette période.';
+    list.appendChild(empty);
+    return;
+  }
+
+  const byDate = new Map();
+  for (const order of orders) {
+    byDate.set(order.date, (byDate.get(order.date) || 0) + order.quantity);
+  }
+  let bestDay = null;
+  for (const [date, quantity] of byDate) {
+    if (!bestDay || quantity > bestDay.quantity) {
+      bestDay = { date, quantity };
+    }
+  }
+
+  const byPerson = new Map();
+  for (const order of orders) {
+    byPerson.set(order.userName, (byPerson.get(order.userName) || 0) + order.quantity);
+  }
+  let topEater = null;
+  for (const [name, quantity] of byPerson) {
+    if (!topEater || quantity > topEater.quantity) {
+      topEater = { name, quantity };
+    }
+  }
+
+  let biggestOrder = null;
+  for (const order of orders) {
+    if (!biggestOrder || order.quantity > biggestOrder.quantity) {
+      biggestOrder = order;
+    }
+  }
+
+  const records = [
+    { emoji: '🏆', text: `Jour recordman : ${formatDate(bestDay.date)} — ${bestDay.quantity} plats` },
+    { emoji: '😋', text: `Plus gros appétit : ${topEater.name} — ${topEater.quantity} plats` },
+    { emoji: '🍣', text: `Plus grosse commande d'un coup : ${biggestOrder.quantity}× ${biggestOrder.itemName} (${biggestOrder.userName})` },
+  ];
+
+  for (const record of records) {
+    const li = document.createElement('li');
+
+    const emoji = document.createElement('span');
+    emoji.className = 'recordEmoji';
+    emoji.textContent = record.emoji;
+    li.appendChild(emoji);
+
+    const text = document.createElement('span');
+    text.textContent = record.text;
+    li.appendChild(text);
+
+    list.appendChild(li);
+  }
+}
+
+// --- Détail (par personne / par plat / tableau croisé) ---
+
+function renderDetailByPerson(filtered) {
   const container = document.getElementById('statsContainer');
   container.innerHTML = '';
 
@@ -117,8 +401,8 @@ function renderDetailCards(filtered) {
   }
 
   for (const name of names) {
-    const items = filtered[name];
-    const total = items.reduce((sum, item) => sum + item.quantity, 0);
+    const items = Array.from(groupByItemName(filtered[name]).values());
+    const total = items.reduce((sum, item) => sum + item.value, 0);
 
     const card = document.createElement('div');
     card.className = 'orderCard';
@@ -129,11 +413,10 @@ function renderDetailCards(filtered) {
 
     const list = document.createElement('ul');
     items
-      .slice()
-      .sort((a, b) => b.quantity - a.quantity || a.itemName.localeCompare(b.itemName, 'fr'))
+      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'fr'))
       .forEach((item) => {
         const li = document.createElement('li');
-        li.textContent = `${item.quantity}× ${item.itemName}`;
+        li.textContent = `${item.value}× ${item.label}`;
         list.appendChild(li);
       });
     card.appendChild(list);
@@ -147,15 +430,15 @@ function renderDetailByDish(filtered) {
   container.innerHTML = '';
 
   const dishByKey = new Map();
-  for (const [name, items] of Object.entries(filtered)) {
-    for (const item of items) {
-      const key = item.itemName.toLowerCase();
+  for (const [name, orders] of Object.entries(filtered)) {
+    for (const order of orders) {
+      const key = order.itemName.toLowerCase();
       if (!dishByKey.has(key)) {
-        dishByKey.set(key, { label: item.itemName, total: 0, people: [] });
+        dishByKey.set(key, { label: order.itemName, total: 0, people: [] });
       }
       const bucket = dishByKey.get(key);
-      bucket.total += item.quantity;
-      bucket.people.push({ name, quantity: item.quantity });
+      bucket.total += order.quantity;
+      bucket.people.push({ name, quantity: order.quantity });
     }
   }
 
@@ -192,46 +475,130 @@ function renderDetailByDish(filtered) {
   }
 }
 
-let currentDetailView = 'person';
+function renderDetailTable(filtered) {
+  const container = document.getElementById('statsContainer');
+  container.innerHTML = '';
+
+  const names = Object.keys(filtered).sort((a, b) => a.localeCompare(b, 'fr'));
+  const dishByKey = new Map();
+  for (const orders of Object.values(filtered)) {
+    for (const order of orders) {
+      const key = order.itemName.toLowerCase();
+      if (!dishByKey.has(key)) {
+        dishByKey.set(key, order.itemName);
+      }
+    }
+  }
+  const dishes = Array.from(dishByKey.entries()).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+
+  if (names.length === 0 || dishes.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'emptyState';
+    empty.textContent = 'Aucune commande enregistrée sur cette période.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tableScroll';
+
+  const table = document.createElement('table');
+  table.className = 'pivotTable';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  headRow.appendChild(document.createElement('th'));
+  for (const [, label] of dishes) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    headRow.appendChild(th);
+  }
+  const totalHeadTh = document.createElement('th');
+  totalHeadTh.textContent = 'Total';
+  headRow.appendChild(totalHeadTh);
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (const name of names) {
+    const row = document.createElement('tr');
+
+    const nameTh = document.createElement('th');
+    nameTh.scope = 'row';
+    nameTh.textContent = name;
+    row.appendChild(nameTh);
+
+    const quantityByKey = new Map();
+    for (const order of filtered[name]) {
+      const key = order.itemName.toLowerCase();
+      quantityByKey.set(key, (quantityByKey.get(key) || 0) + order.quantity);
+    }
+
+    let rowTotal = 0;
+    for (const [key] of dishes) {
+      const quantity = quantityByKey.get(key) || 0;
+      rowTotal += quantity;
+      const td = document.createElement('td');
+      td.textContent = quantity > 0 ? String(quantity) : '–';
+      if (quantity === 0) {
+        td.className = 'pivotZero';
+      }
+      row.appendChild(td);
+    }
+
+    const totalTd = document.createElement('td');
+    totalTd.className = 'pivotTotal';
+    totalTd.textContent = String(rowTotal);
+    row.appendChild(totalTd);
+
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+
+  wrapper.appendChild(table);
+  container.appendChild(wrapper);
+}
+
+// --- Orchestration ---
 
 function renderAll() {
-  const filtered = getFilteredData();
+  const filteredOrders = getFilteredOrders();
+  const filteredByPerson = groupByPerson(filteredOrders);
 
-  const personEntries = Object.entries(filtered)
-    .map(([name, items]) => ({
+  renderKpis(filteredOrders);
+
+  const personEntries = Object.entries(filteredByPerson)
+    .map(([name, orders]) => ({
       label: name,
-      value: items.reduce((sum, item) => sum + item.quantity, 0),
+      value: orders.reduce((sum, o) => sum + o.quantity, 0),
       hueClass: 'barFillVermillion',
     }))
     .sort((a, b) => b.value - a.value);
 
-  const dishTotals = new Map();
-  for (const items of Object.values(filtered)) {
-    for (const item of items) {
-      const key = item.itemName.toLowerCase();
-      const existing = dishTotals.get(key);
-      if (existing) {
-        existing.value += item.quantity;
-      } else {
-        dishTotals.set(key, { label: item.itemName, value: item.quantity, hueClass: 'barFillIndigo' });
-      }
-    }
-  }
-  const dishEntries = Array.from(dishTotals.values()).sort((a, b) => b.value - a.value);
+  const dishEntries = Array.from(groupByItemName(filteredOrders).values())
+    .map((entry) => ({ ...entry, hueClass: 'barFillIndigo' }))
+    .sort((a, b) => b.value - a.value);
 
   renderBarChart(document.getElementById('personChart'), personEntries);
   renderBarChart(document.getElementById('dishChart'), dishEntries);
+  renderEvolution(filteredOrders);
+  renderDonut(filteredOrders);
+  renderRecords(filteredOrders);
 
   if (currentDetailView === 'dish') {
-    renderDetailByDish(filtered);
+    renderDetailByDish(filteredByPerson);
+  } else if (currentDetailView === 'table') {
+    renderDetailTable(filteredByPerson);
   } else {
-    renderDetailCards(filtered);
+    renderDetailByPerson(filteredByPerson);
   }
 }
 
 async function loadStats(scope) {
+  currentScope = scope;
   const res = await fetch(`/api/stats?scope=${scope}`);
-  rawData = await res.json();
+  const data = await res.json();
+  rawOrders = data.orders;
   populateFilters();
   renderAll();
 }

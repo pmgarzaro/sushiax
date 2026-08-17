@@ -35,6 +35,8 @@
       <select id="dishFilter" class="filterSelect"></select>
     </div>
 
+    <div id="kpiRow" class="kpiRow"></div>
+
     <div class="chartsGrid">
       <div class="chartCard">
         <h2>Qui a le plus mangé <span class="chartHint">(nb. de plats)</span></h2>
@@ -46,11 +48,28 @@
       </div>
     </div>
 
+    <div class="chartCard evolutionCard">
+      <h2>Évolution <span class="chartHint" id="evolutionHint"></span></h2>
+      <div id="evolutionChart" class="evolutionChart"></div>
+    </div>
+
+    <div class="chartsGrid">
+      <div class="chartCard">
+        <h2>Part de la carte</h2>
+        <div id="donutChart" class="donutWrap"></div>
+      </div>
+      <div class="chartCard recordsCard">
+        <h2>Records</h2>
+        <ul id="recordsList" class="recordsList"></ul>
+      </div>
+    </div>
+
     <div class="detailHeader">
       <h2 class="sectionTitle">Détail</h2>
       <div class="tabs" id="viewTabs">
         <button type="button" class="tabBtn tabBtnActive" data-view="person">Par personne</button>
         <button type="button" class="tabBtn" data-view="dish">Par plat</button>
+        <button type="button" class="tabBtn" data-view="table">Tableau croisé</button>
       </div>
     </div>
     <div id="statsContainer" class="peopleContainer"></div>

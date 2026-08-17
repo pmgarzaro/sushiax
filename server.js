@@ -133,25 +133,16 @@ app.get('/api/stats', requireAuth, (req, res) => {
   const from = scope === 'year' ? `${year}-01-01` : `${year}-${month}-01`;
   const to = scope === 'year' ? `${year}-12-31` : `${year}-${month}-31`;
 
-  const orders = db.ordersInRange(from, to);
-  const byUser = {};
-  for (const order of orders) {
-    if (!byUser[order.userName]) {
-      byUser[order.userName] = new Map();
-    }
-    const key = order.itemName.trim().toLowerCase();
-    const bucket = byUser[order.userName];
-    if (!bucket.has(key)) {
-      bucket.set(key, { itemName: order.itemName, quantity: 0 });
-    }
-    bucket.get(key).quantity += order.quantity;
-  }
+  // Commandes brutes (avec date) : le client se charge de tous les regroupements
+  // (par personne, par plat, par jour/mois pour l'évolution, records, etc.)
+  const orders = db.ordersInRange(from, to).map((order) => ({
+    userName: order.userName,
+    itemName: order.itemName,
+    quantity: order.quantity,
+    date: order.date,
+  }));
 
-  const result = {};
-  for (const [userName, bucket] of Object.entries(byUser)) {
-    result[userName] = Array.from(bucket.values());
-  }
-  res.json(result);
+  res.json({ scope, from, to, orders });
 });
 
 const PORT = process.env.PORT || 3000;
